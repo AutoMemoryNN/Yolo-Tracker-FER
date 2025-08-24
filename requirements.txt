@@ -6,3 +6,6 @@ torch
 torchvision
 
 huggingface_hub
+
+fer
+tensorflow
