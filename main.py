@@ -1,11 +1,13 @@
 import cv2
 import time
+
+from ultralytics import YOLO
 from core.detectors.face_detector import FaceDetector
 from core.detectors.emotion_detector import EmotionDetector
 
 
 def main():
-    cap = cv2.VideoCapture(0)  # webcam
+    cap = cv2.VideoCapture(1)  # webcam
     face_detector = FaceDetector()
     emotion_detector = EmotionDetector(backend="mtcnn")
 

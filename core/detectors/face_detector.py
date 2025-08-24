@@ -1,10 +1,17 @@
 from huggingface_hub import hf_hub_download
 from ultralytics import YOLO
 
-class FaceDetector:
+from core.detectors.types import FaceDetector
+
+
+class YOLOFaceDetector(FaceDetector):
     def __init__(self, model_path="\\models\\yolov11n.pt", conf=0.5):
         # Cargamos modelo YOLO
-        self.model = YOLO(hf_hub_download(repo_id="arnabdhar/YOLOv8-Face-Detection", filename="model.pt"))
+        self.model = YOLO(
+            hf_hub_download(
+                repo_id="arnabdhar/YOLOv8-Face-Detection", filename="model.pt"
+            )
+        )
         self.conf = conf
 
     def detect(self, frame):
