@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import TypedDict
 
 import numpy as np
@@ -7,6 +8,13 @@ import numpy as np
 class EmotionResult(TypedDict):
     emotion: str | None
     score: float
+
+
+@dataclass
+class Person:
+    id: int
+    bbox: tuple[int, int, int, int]
+    emotion: EmotionResult | None
 
 
 class FaceDetector(ABC):
