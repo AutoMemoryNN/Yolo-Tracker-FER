@@ -1,6 +1,12 @@
+from concurrent.futures import ThreadPoolExecutor
 import time
 import cv2
 from core.detectors.types import EmotionDetector, FaceDetector, Person, PersonDetector
+from core.trackers.types import Tracker
+
+import os
+
+os.environ["YOLO_VERBOSE"] = "False"
 
 
 class Vision:
@@ -13,11 +19,13 @@ class Vision:
         person_detector: PersonDetector,
         face_detector: FaceDetector,
         emotion_detector: EmotionDetector,
+        tracker: Tracker | None = None,
         camera_n: int = 0,
     ):
         self.person_detector = person_detector
         self.face_detector = face_detector
         self.emotion_detector = emotion_detector
+        self.tracker = tracker
         self.face_detected: list[Person] = []
         self.camera = cv2.VideoCapture(camera_n)
 
@@ -72,6 +80,7 @@ class Vision:
         frame: cv2.typing.MatLike | None = None,
         percentage_padding: float = 0.0,
         square: bool = False,
+        use_tracking: bool = True,
     ) -> list[Person]:
         """Process a frame and update persons_detected.
 
@@ -86,31 +95,63 @@ class Vision:
                 self.face_detected = []
                 return []
 
+        # Detect faces
         face_bboxes = self.face_detector.detect(frame)
         _ = self.person_detector.detect(frame)  # reserve
 
+        # Update tracker with detected faces
+        if use_tracking and self.tracker:
+            # Update tracker and get assignments
+            self.tracker.update(face_bboxes)
+            assignments = (
+                self.tracker.get_assignments(face_bboxes)
+                if hasattr(self.tracker, "get_assignments")
+                else {}
+            )
+        else:
+            assignments = {i: i for i in range(len(face_bboxes))}
+
         current_persons: list[Person] = []
 
-        person_id = 0
-        for bbox in face_bboxes:
-            face_roi, adj_bbox = self._extract_roi(
-                frame,
-                bbox,
-                percentage_padding=percentage_padding,
-                square=square,
-            )
+        # Use thread pool for parallel emotion prediction
+        futures_with_indices = []
+        with ThreadPoolExecutor() as executor:
+            for detection_idx, bbox in enumerate(face_bboxes):
+                face_roi, adj_bbox = self._extract_roi(
+                    frame,
+                    bbox,
+                    percentage_padding=percentage_padding,
+                    square=square,
+                )
 
-            emotion_result = (
-                self.emotion_detector.predict(face_roi) if face_roi.size > 0 else None
-            )
+                # Get tracking ID for this detection
+                tracking_id = assignments.get(detection_idx, detection_idx)
 
-            person = Person(id=person_id, face_bbox=adj_bbox, emotion=emotion_result)
-            current_persons.append(person)
-            person_id += 1
+                # Reserve person object without emotion yet
+                current_persons.append(
+                    Person(id=tracking_id, face_bbox=adj_bbox, emotion=None)
+                )
+
+                if face_roi.size > 0:
+                    # Launch emotion prediction in a thread
+                    future = executor.submit(self.emotion_detector.predict, face_roi)
+                    futures_with_indices.append((future, detection_idx))
+
+            # Collect results from threads
+            for future, detection_idx in futures_with_indices:
+                emotion_result = future.result()  # Wait for each thread
+                current_persons[detection_idx].emotion = emotion_result
 
         self.face_detected = current_persons
-
-        processing_time = time.time() - start_time
-        self.last_time = processing_time
+        self.last_time = time.time() - start_time
 
         return current_persons
+
+    def get_fps(self) -> float:
+        """Get the processing FPS based on last frame processing time."""
+        return 1.0 / self.last_time if self.last_time > 0 else 0.0
+
+    def release(self) -> None:
+        """Release camera resources."""
+        if self.camera:
+            self.camera.release()

@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import time
 from core.detectors.types import Person
 from core.Vision import Vision
 
@@ -24,6 +25,7 @@ class Interpreter:
 
     def __init__(self, vision: Vision) -> None:
         self.vision = vision
+        self.fps = vision.get_fps()
 
     def render(self, frame: np.ndarray, persons: list[Person]) -> None:
         for person in persons:
@@ -47,8 +49,8 @@ class Interpreter:
                     2,
                 )
 
-        if self.SHOW_TIME and hasattr(self.vision, "last_time"):
-            time_text = f"Time: {self.vision.last_time:.3f}s"
+        if self.SHOW_TIME and hasattr(self.vision, "fps"):
+            time_text = f"FPS: {self.vision.fps:.2f}"
             cv2.putText(
                 frame,
                 time_text,
