@@ -1,3 +1,4 @@
+from core.Interpreter import Interpreter
 from core.Vision import Vision
 from core.detectors.deep_emotion_detector import DeepFaceEmotionDetector
 from core.detectors.fer_emotion_detector import FerEmotionDetector
@@ -12,4 +13,6 @@ if __name__ == "__main__":
         emotion_detector=FerEmotionDetector(),
         camera_n=0,
     )
-    vision.show_detected_persons()
+
+    interpreter = Interpreter(vision)
+    interpreter.interpret()

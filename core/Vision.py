@@ -1,10 +1,12 @@
+import time
 import cv2
 from core.detectors.types import EmotionDetector, FaceDetector, Person, PersonDetector
-import time
 
 
 class Vision:
     """Handle all vision-related tasks, interpretation and processing of visual data."""
+
+    last_time: float = 0.0
 
     def __init__(
         self,
@@ -17,7 +19,6 @@ class Vision:
         self.face_detector = face_detector
         self.emotion_detector = emotion_detector
         self.face_detected: list[Person] = []
-        self.persons_detected: list[Person] = []
         self.camera = cv2.VideoCapture(camera_n)
 
     def _extract_roi(
@@ -86,7 +87,7 @@ class Vision:
                 return []
 
         face_bboxes = self.face_detector.detect(frame)
-        persons_bboxes = self.person_detector.detect(frame)
+        _ = self.person_detector.detect(frame)  # reserve
 
         current_persons: list[Person] = []
 
@@ -110,49 +111,6 @@ class Vision:
         self.face_detected = current_persons
 
         processing_time = time.time() - start_time
-        print(f"Frame processing time: {processing_time:.3f} seconds")
+        self.last_time = processing_time
 
         return current_persons
-
-    def show_detected_persons(self) -> None:
-        """display video with current detections only.
-
-        Draws boxes and emotions for the current frame only so old boxes
-        disappear naturally, minimizing lag.
-        Press 'q' to close the window.
-        """
-        try:
-            while True:
-                ret, frame = self.camera.read()
-                if not ret:
-                    continue
-
-                persons = self.process_frame(frame, percentage_padding=0.1, square=True)
-
-                for person in persons:
-                    x1, y1, x2, y2 = map(int, person.face_bbox)
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                    emotion_text = (
-                        str(person.emotion)
-                        if person.emotion and person.emotion.get("emotion") is not None
-                        else "Unknown"
-                    )
-                    cv2.putText(
-                        frame,
-                        emotion_text,
-                        (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.9,
-                        (0, 255, 0),
-                        2,
-                    )
-
-                cv2.imshow("Detected Persons", frame)
-
-                key = cv2.waitKey(1) & 0xFF
-                if key == ord("q"):
-                    break
-        finally:
-            if self.camera is not None:
-                self.camera.release()
-            cv2.destroyAllWindows()
