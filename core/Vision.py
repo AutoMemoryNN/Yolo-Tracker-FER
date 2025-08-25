@@ -92,7 +92,7 @@ class Vision:
 
         person_id = 0
         for bbox in face_bboxes:
-            face_roi, _ = self._extract_roi(
+            face_roi, adj_bbox = self._extract_roi(
                 frame,
                 bbox,
                 percentage_padding=percentage_padding,
@@ -102,7 +102,8 @@ class Vision:
             emotion_result = (
                 self.emotion_detector.predict(face_roi) if face_roi.size > 0 else None
             )
-            person = Person(id=person_id, face_bbox=bbox, emotion=emotion_result)
+
+            person = Person(id=person_id, face_bbox=adj_bbox, emotion=emotion_result)
             current_persons.append(person)
             person_id += 1
 
@@ -126,7 +127,7 @@ class Vision:
                 if not ret:
                     continue
 
-                persons = self.process_frame(frame)
+                persons = self.process_frame(frame, percentage_padding=0.1, square=True)
 
                 for person in persons:
                     x1, y1, x2, y2 = map(int, person.face_bbox)
