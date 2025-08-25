@@ -13,11 +13,17 @@ class EmotionResult(TypedDict):
 @dataclass
 class Person:
     id: int
-    bbox: tuple[int, int, int, int]
+    face_bbox: tuple[int, int, int, int]
     emotion: EmotionResult | None
 
 
 class FaceDetector(ABC):
+    @abstractmethod
+    def detect(self, image: np.ndarray) -> list[tuple[int, int, int, int]]:
+        pass
+
+
+class PersonDetector(ABC):
     @abstractmethod
     def detect(self, image: np.ndarray) -> list[tuple[int, int, int, int]]:
         pass

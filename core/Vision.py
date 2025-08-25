@@ -1,5 +1,6 @@
 import cv2
-from core.detectors.types import EmotionDetector, FaceDetector, Person
+from core.detectors.types import EmotionDetector, FaceDetector, Person, PersonDetector
+import time
 
 
 class Vision:
@@ -7,12 +8,15 @@ class Vision:
 
     def __init__(
         self,
+        person_detector: PersonDetector,
         face_detector: FaceDetector,
         emotion_detector: EmotionDetector,
         camera_n: int = 0,
     ):
+        self.person_detector = person_detector
         self.face_detector = face_detector
         self.emotion_detector = emotion_detector
+        self.face_detected: list[Person] = []
         self.persons_detected: list[Person] = []
         self.camera = cv2.VideoCapture(camera_n)
 
@@ -73,13 +77,16 @@ class Vision:
         If frame is None, capture one from the camera. Returns the list of
         detected persons for the processed frame.
         """
+        start_time = time.time()
+
         if frame is None:
             ret, frame = self.camera.read()
             if not ret:
-                self.persons_detected = []
+                self.face_detected = []
                 return []
 
         face_bboxes = self.face_detector.detect(frame)
+        persons_bboxes = self.person_detector.detect(frame)
 
         current_persons: list[Person] = []
 
@@ -95,11 +102,15 @@ class Vision:
             emotion_result = (
                 self.emotion_detector.predict(face_roi) if face_roi.size > 0 else None
             )
-            person = Person(id=person_id, bbox=bbox, emotion=emotion_result)
+            person = Person(id=person_id, face_bbox=bbox, emotion=emotion_result)
             current_persons.append(person)
             person_id += 1
 
-        self.persons_detected = current_persons
+        self.face_detected = current_persons
+
+        processing_time = time.time() - start_time
+        print(f"Frame processing time: {processing_time:.3f} seconds")
+
         return current_persons
 
     def show_detected_persons(self) -> None:
@@ -118,7 +129,7 @@ class Vision:
                 persons = self.process_frame(frame)
 
                 for person in persons:
-                    x1, y1, x2, y2 = map(int, person.bbox)
+                    x1, y1, x2, y2 = map(int, person.face_bbox)
                     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                     emotion_text = (
                         str(person.emotion)

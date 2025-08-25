@@ -5,7 +5,7 @@ from core.detectors.types import FaceDetector
 
 
 class YOLOFaceDetector(FaceDetector):
-    def __init__(self, model_path="\\models\\yolov11n.pt", conf=0.5):
+    def __init__(self, model_path="\\models\\hug_yolov11n.pt", conf=0.5):
         # Cargamos modelo YOLO
         self.model = YOLO(
             hf_hub_download(
