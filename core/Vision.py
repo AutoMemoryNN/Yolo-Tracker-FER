@@ -1,7 +1,12 @@
-from concurrent.futures import ThreadPoolExecutor
 import time
 import cv2
-from core.detectors.types import EmotionDetector, FaceDetector, Person, PersonDetector
+from core.detectors.types import (
+    EmotionDetector,
+    FaceDetector,
+    Person,
+    PersonDetector,
+    EmotionResult,
+)
 from core.trackers.types import Tracker
 
 import os
@@ -111,36 +116,34 @@ class Vision:
         else:
             assignments = {i: i for i in range(len(face_bboxes))}
 
+        # Sequential emotion prediction (no threads)
         current_persons: list[Person] = []
 
-        # Use thread pool for parallel emotion prediction
-        futures_with_indices = []
-        with ThreadPoolExecutor() as executor:
-            for detection_idx, bbox in enumerate(face_bboxes):
-                face_roi, adj_bbox = self._extract_roi(
-                    frame,
-                    bbox,
-                    percentage_padding=percentage_padding,
-                    square=square,
-                )
+        for detection_idx, bbox in enumerate(face_bboxes):
+            face_roi, adj_bbox = self._extract_roi(
+                frame,
+                bbox,
+                percentage_padding=percentage_padding,
+                square=square,
+            )
 
-                # Get tracking ID for this detection
-                tracking_id = assignments.get(detection_idx, detection_idx)
+            # Get tracking ID for this detection
+            tracking_id = assignments.get(detection_idx, detection_idx)
 
-                # Reserve person object without emotion yet
-                current_persons.append(
-                    Person(id=tracking_id, face_bbox=adj_bbox, emotion=None)
-                )
+            # Default emotion result
+            emotion_result: EmotionResult | None = None
 
-                if face_roi.size > 0:
-                    # Launch emotion prediction in a thread
-                    future = executor.submit(self.emotion_detector.predict, face_roi)
-                    futures_with_indices.append((future, detection_idx))
+            if face_roi.size > 0:
+                try:
+                    # Predict emotion sequentially
+                    emotion_result = self.emotion_detector.predict(face_roi.copy())
+                except Exception:
+                    emotion_result = None
 
-            # Collect results from threads
-            for future, detection_idx in futures_with_indices:
-                emotion_result = future.result()  # Wait for each thread
-                current_persons[detection_idx].emotion = emotion_result
+            # Append person with computed emotion
+            current_persons.append(
+                Person(id=tracking_id, face_bbox=adj_bbox, emotion=emotion_result)
+            )
 
         self.face_detected = current_persons
         self.last_time = time.time() - start_time

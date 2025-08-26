@@ -1,14 +1,6 @@
-from concurrent.futures import ThreadPoolExecutor
-import time
-import cv2
 import numpy as np
-from typing import Dict, List, Tuple, Set
-from core.detectors.types import EmotionDetector, FaceDetector, Person, PersonDetector
-from core.trackers.types import Tracker
-
-# Types for the tracker
-Rect = Tuple[int, int, int, int]  # (x1, y1, x2, y2)
-TrackMap = Dict[int, np.ndarray]  # id -> centroid
+from typing import Dict, List, Set
+from core.trackers.types import Rect, TrackMap, Tracker
 
 
 class CentroidTracker(Tracker):
