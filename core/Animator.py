@@ -46,14 +46,14 @@ class Animator(threading.Thread):
                 print("Animator snapshot:", data)
                 last_state = now
 
-            # Genera comentario cada 15s
-            if now - last_chat >= 15.0:
+            # Genera comentario cada 25s
+            if now - last_chat >= 25:
                 try:
                     prompt = self._build_prompt(self.latest_data)
                     print("Prompt para ChatGPT:", prompt)
 
                     response = self.chatgpt_client.chat.completions.create(
-                        model="gpt-5-nano",  # o4-mini
+                        model="gpt-4o-mini-2024-07-18",
                         messages=[
                             {
                                 "role": "system",
@@ -87,20 +87,31 @@ class Animator(threading.Thread):
         Construye el contexto que se le manda a ChatGPT
         """
         base_context = (
-            "Eres un animador en un evento universitario. "
+            "Eres un animador en un evento universitario en vivo. "
             "El presentador es Juan Pablo Camargo, líder del semillero de IA. "
-            "Estudiantes de grado 11 visitan la universidad Escuela colombiana de Ingenieria Julio Garavito. "
-            "Tu rol es comentar en tiempo real de manera entretenida, positiva y cercana.\n\n"
-            "Datos actuales:\n"
-            "No hagas siempre el mismo comentario, saluda de vez en cuando, y recuerda enfocarte en el publico, menciona cuantas personas se encuentran y cosas por el estilo."
-            f"- Personas detectadas (rostros detectados): {data.get('num_persons', 0)}\n"
-            f"- Emociones promedio (emociones de los ultimos 5 segundos del publico): {data.get('avg_emotion', {})}\n"
-            f"- Top emociones (emociones mas intensas en el momento solo son interesantes si superan el umbral 0.94 o si no hay mas temas): {list(data.get('threshold_top', {}).keys())}\n\n"
-            "Si se incluye una imagen de una persona aleatoria, haz un cumplido amable y breve.\n"
-            f"Este fue tu comentario anterior: {self.commentary}"
-            "Recuerda ser breve, no menciones dos veces seguidas lo mismo."
-            "IMPORTANTE, la dinamica es que los estudiantes hagan emociones frente a la camara y vean como la IA la clasifica, si vez caras de susto o enojadas no es malo, es parte de la dinamica y podrias jugar con ello."
-            "No tienes que mencionar mi nombre ni la universidad tan seguido, porque los estudiantes ya lo ven."
+            "El público son estudiantes de grado 11 que visitan la Escuela Colombiana de Ingeniería Julio Garavito. "
+            "Tu misión es comentar en tiempo real de forma entretenida, positiva y cercana, como si fueras un animador "
+            "que interactúa directamente con el público.\n\n"
+            "### Instrucciones de estilo:\n"
+            "- Sé breve: máximo 2 a 3 frases por intervención.\n"
+            "- Varía los comentarios: no repitas la misma idea seguida.\n"
+            "- Saluda ocasionalmente y genera cercanía.\n"
+            "- Enfócate siempre en el público y su experiencia, cuántas personas hay? cuántos están tristes? lo normal es que esten felices, enfocate en lo raro.\n"
+            "- Usa un tono entusiasta, pero natural (no exagerado).\n"
+            "- Puedes hacer pequeñas bromas.\n\n"
+            "- Se breve lo mas que puedas.\n"
+            "### Datos en tiempo real en lo que te debes centrar, háblale a la persona o personas al frente:\n"
+            f"- Personas detectadas: {data.get('num_persons', 0)}\n"
+            f"- Emociones promedio (últimos 5s): {data.get('avg_emotion', {})}\n"
+            f"- Top emociones (si superan 0.94 o si no hay otro tema): {list(data.get('threshold_top', {}).keys())}\n\n"
+            "### Consideraciones especiales:\n"
+            "- Si aparece la imagen de una persona aleatoria, haz un cumplido breve y amable.\n"
+            "- Si ves caras de susto o enojo, no lo tomes como negativo; es parte de la dinámica. "
+            "Puedes jugar con ello de manera divertida.\n"
+            "- No menciones demasiado seguido el nombre de Juan Pablo ni la universidad; "
+            "los estudiantes ya lo saben.\n\n"
+            f"### Tu comentario anterior fue: {self.commentary}\n"
+            "Evita repetirlo o insistir en el mismo tema de forma consecutiva."
         )
         return base_context
 
@@ -132,13 +143,41 @@ class AnimadorWindow(QMainWindow):
         self.animator = animator
         self.setWindowTitle("Animador")
 
+        # Logo y nombre del director
+        logo_label = QLabel()
+        logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        try:
+            logo_pixmap = QPixmap("images/logo.png")
+            if not logo_pixmap.isNull():
+                logo_label.setPixmap(
+                    logo_pixmap.scaledToHeight(
+                        60, Qt.TransformationMode.SmoothTransformation
+                    )
+                )
+            else:
+                logo_label.setText("Logo no encontrado")
+        except Exception as e:
+            logo_label.setText("Error cargando logo")
+            print(f"Error cargando logo: {e}")
+
+        director_label = QLabel("Juan Pablo Camargo\nDirector del Semillero de IA")
+        director_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        director_label.setStyleSheet(
+            "font-size: 16px; font-weight: bold; color: #2c3e50; margin: 5px;"
+        )
+
+        # Comentarios del animador
         self.label = QLabel("Preparando al animador...")
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.label.setWordWrap(True)
-        self.label.setStyleSheet("font-size: 36px; font-weight: bold;")
+        self.label.setStyleSheet("font-size: 36px; font-weight: bold; margin: 20px;")
 
         layout = QVBoxLayout()
+        layout.addWidget(logo_label)
+        layout.addWidget(director_label)
         layout.addWidget(self.label)
+        layout.setSpacing(10)
+
         container = QWidget()
         container.setLayout(layout)
         self.setCentralWidget(container)
@@ -194,7 +233,7 @@ class TopEmotionWindow(QMainWindow):
         # Timer para refrescar la UI
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_ui)
-        self.timer.start(2000)
+        self.timer.start(1000)
 
     def update_ui(self) -> None:
         data = self.animator.latest_data

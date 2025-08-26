@@ -1,6 +1,7 @@
 from collections import deque, defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
+import time
 import cv2
 import numpy as np
 from core.detectors.types import Person
@@ -43,6 +44,7 @@ class Interpreter:
         self.persons_records: deque[List[Person]] = deque(maxlen=50)
         self.avg_persons_emotion: dict[int, dict[str, float]] = {}
         self.current_frame: Optional[np.ndarray] = None
+        self.last_persons: List[Person] = []  # snapshot de personas para el display
 
         self.persons_by_id: Dict[int, Person] = {}
         self.more_emotional_top: Dict[str, Optional[TopEmotional]] = {}
@@ -221,7 +223,9 @@ class Interpreter:
         cv2.imshow(self.WINDOW_NAME, frame)
 
     def interpret(self) -> None:
-        """Main loop: grab frames, run process_frame, then render based on flags."""
+        """Main loop: render at ~30 FPS and process every N ms; boxes can go at 3-5 FPS."""
+        process_dt = 1.0 / 5.0  # ~5 FPS for logic; increase to 1/3.0 for ~3 FPS
+        last_proc = 0.0
         try:
             while True:
                 ret, frame = self.vision.camera.read()
@@ -229,23 +233,32 @@ class Interpreter:
                     continue
 
                 self.current_frame = frame
+                now = time.monotonic()
 
-                persons = self.vision.process_frame(
-                    frame,
-                    percentage_padding=self.PERCENTAGE_PADDING,
-                    square=self.SQUARE_ROI,
-                )
+                # process at slower rate
+                do_process = (now - last_proc) >= process_dt
+                if do_process:
+                    persons = self.vision.process_frame(
+                        frame,
+                        percentage_padding=self.PERCENTAGE_PADDING,
+                        square=self.SQUARE_ROI,
+                    )
 
-                self.persons_by_id.clear()
-                self.persons_by_id.update({p.id: p for p in persons})
+                    # update snapshots only when there's new processing
+                    self.persons_by_id.clear()
+                    self.persons_by_id.update({p.id: p for p in persons})
+                    self.last_persons = persons[:]  # lightweight copy
 
-                self.persons_records.append(persons)
-                self.update_avg_emotions()
+                    self.persons_records.append(persons)
+                    self.update_avg_emotions()
+                    self.update_top_persons_by_threshold(persons)
 
-                self.update_top_persons_by_threshold(persons)
+                    last_proc = now
 
+                # always render using the last available result
                 if self.DISPLAY:
-                    self.render(frame, persons)
+                    disp = frame.copy()
+                    self.render(disp, self.last_persons)
 
                 self._tick_counter += 1
 
