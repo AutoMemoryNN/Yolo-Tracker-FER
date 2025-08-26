@@ -16,7 +16,7 @@ if __name__ == "__main__":
         face_detector=YOLOFaceDetector(),
         emotion_detector=FerEmotionDetector(),
         tracker=CentroidTracker(),
-        camera_n=1,
+        camera_n=0,
     )
     interpreter = Interpreter(vision)
 
