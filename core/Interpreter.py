@@ -35,7 +35,7 @@ class Interpreter:
 
     MAX_PERSONS_IN_RECORD: int = 50
     TOPS_UPDATE_TICKS: int = 50
-    EMOTION_THRESHOLD: float = 0.9
+    EMOTION_THRESHOLD: float = 0.82
 
     def __init__(self, vision: Vision) -> None:
         self.vision = vision
@@ -125,8 +125,6 @@ class Interpreter:
         return top_id
 
     def update_top_persons_by_threshold(self, persons: List[Person]) -> None:
-        new_tops: Dict[str, Optional[TopEmotional]] = {}
-
         for p in persons:
             if not p.emotion or not p.emotion.get("emotion"):
                 continue
@@ -139,26 +137,28 @@ class Interpreter:
             score = float(p.emotion.get("score", 0.0))
 
             if score >= self.EMOTION_THRESHOLD:
-                if self.current_frame is None:
-                    continue
+                # Check if we already have a top for this emotion
+                current_top = self.threshold_top.get(emo_name)
 
-                roi, _ = self.vision._extract_roi(
-                    self.current_frame,
-                    p.face_bbox,
-                    percentage_padding=self.PERCENTAGE_PADDING,
-                    square=self.SQUARE_ROI,
-                )
+                # Only update if we don't have a top for this emotion or if the new score is higher
+                if current_top is None or score > current_top.score:
+                    if self.current_frame is None:
+                        continue
 
-                if roi.size > 0:
-                    new_tops[emo_name] = TopEmotional(
-                        person_id=p.id,
-                        emotion=emo_name,
-                        score=score,
-                        frame=roi,
+                    roi, _ = self.vision._extract_roi(
+                        self.current_frame,
+                        p.face_bbox,
+                        percentage_padding=self.PERCENTAGE_PADDING,
+                        square=self.SQUARE_ROI,
                     )
 
-        if new_tops != self.threshold_top:
-            self.threshold_top = new_tops
+                    if roi.size > 0:
+                        self.threshold_top[emo_name] = TopEmotional(
+                            person_id=p.id,
+                            emotion=emo_name,
+                            score=score,
+                            frame=roi,
+                        )
 
     def _save_top_roi(
         self, frame: np.ndarray, person: Person, emotion: str

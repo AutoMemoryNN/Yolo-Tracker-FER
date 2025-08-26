@@ -12,3 +12,5 @@ tensorflow
 
 deepface
 tf-keras
+
+PySide6
