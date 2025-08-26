@@ -33,3 +33,7 @@ class EmotionDetector(ABC):
     @abstractmethod
     def predict(self, image: np.ndarray) -> EmotionResult:
         pass
+
+    @abstractmethod
+    def get_available_emotions(self) -> list[str]:
+        pass

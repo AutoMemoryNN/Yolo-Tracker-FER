@@ -15,3 +15,7 @@ class FerEmotionDetector(EmotionDetector):
             return {"emotion": None, "score": 0.0}
         emotion, score = result
         return {"emotion": emotion, "score": score}
+
+    def get_available_emotions(self) -> list[str]:
+        # Hardcoded list of available emotions
+        return ["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"]

@@ -1,9 +1,21 @@
 from collections import deque, defaultdict
+from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 import cv2
 import numpy as np
 from core.detectors.types import Person
 from core.Vision import Vision
+
+
+@dataclass
+class TopEmotional:
+    """Class to hold the top emotional scores for each person."""
+
+    person_id: int
+    emotion: str
+    score: float
+    # Do not include ROI content in equality to avoid numpy broadcasting errors
+    frame: np.ndarray = field(compare=False)
 
 
 class Interpreter:
@@ -22,15 +34,22 @@ class Interpreter:
     SQUARE_ROI: bool = True
 
     MAX_PERSONS_IN_RECORD: int = 50
+    TOPS_UPDATE_TICKS: int = 50
+    EMOTION_THRESHOLD: float = 0.9
 
     def __init__(self, vision: Vision) -> None:
         self.vision = vision
         self.fps = vision.get_fps()
         self.persons_records: deque[List[Person]] = deque(maxlen=50)
         self.avg_persons_emotion: dict[int, dict[str, float]] = {}
+        self.current_frame: Optional[np.ndarray] = None
+
+        self.persons_by_id: Dict[int, Person] = {}
+        self.more_emotional_top: Dict[str, Optional[TopEmotional]] = {}
+        self.threshold_top: Dict[str, Optional[TopEmotional]] = {}
+        self._tick_counter: int = 0
 
     def update_avg_emotions(self) -> None:
-        """Calcula el promedio de emociones por persona (requiere cola llena)."""
         if (
             self.persons_records.maxlen is None
             or len(self.persons_records) < self.persons_records.maxlen
@@ -62,22 +81,98 @@ class Interpreter:
                 if n > 0:
                     result[emo_name] = total / n
             self.avg_persons_emotion[pid] = result
-            print(f"ID {pid} - Promedios: {result}")
+            if self._tick_counter % 100 == 0:
+                print(f"ID {pid} - Avg: {result}")
 
     def get_top_person(self, emotion: str) -> Optional[int]:
-        """Returns the ID of the person with the highest average in a given emotion."""
         if not self.avg_persons_emotion:
             return None
 
         emotion = emotion.lower()
         top_id = None
         top_score = -1.0
+
         for pid, emo_dict in self.avg_persons_emotion.items():
             if emotion in emo_dict and emo_dict[emotion] > top_score:
                 top_id = pid
                 top_score = emo_dict[emotion]
 
+        # If there is no top or the current person is not visible, clear and exit
+        if top_id is None:
+            self.more_emotional_top[emotion] = None
+            return None
+
+        # Need a current frame and a visible person in this frame to snapshot
+        if self.current_frame is None or top_id not in self.persons_by_id:
+            self.more_emotional_top[emotion] = None
+            return None
+
+        person_frame = self._save_top_roi(
+            self.current_frame, self.persons_by_id[top_id], emotion
+        )
+
+        if person_frame is None:
+            self.more_emotional_top[emotion] = None
+            return None
+
+        self.more_emotional_top[emotion] = TopEmotional(
+            person_id=top_id,
+            emotion=emotion,
+            score=top_score,
+            frame=person_frame,
+        )
+
         return top_id
+
+    def update_top_persons_by_threshold(self, persons: List[Person]) -> None:
+        new_tops: Dict[str, Optional[TopEmotional]] = {}
+
+        for p in persons:
+            if not p.emotion or not p.emotion.get("emotion"):
+                continue
+
+            emotion_value = p.emotion["emotion"]
+            if emotion_value is None:
+                continue
+
+            emo_name = emotion_value.lower()
+            score = float(p.emotion.get("score", 0.0))
+
+            if score >= self.EMOTION_THRESHOLD:
+                if self.current_frame is None:
+                    continue
+
+                roi, _ = self.vision._extract_roi(
+                    self.current_frame,
+                    p.face_bbox,
+                    percentage_padding=self.PERCENTAGE_PADDING,
+                    square=self.SQUARE_ROI,
+                )
+
+                if roi.size > 0:
+                    new_tops[emo_name] = TopEmotional(
+                        person_id=p.id,
+                        emotion=emo_name,
+                        score=score,
+                        frame=roi,
+                    )
+
+        if new_tops != self.threshold_top:
+            self.threshold_top = new_tops
+
+    def _save_top_roi(
+        self, frame: np.ndarray, person: Person, emotion: str
+    ) -> Optional[np.ndarray]:
+        roi, _ = self.vision._extract_roi(
+            frame,
+            person.face_bbox,
+            percentage_padding=self.PERCENTAGE_PADDING,
+            square=self.SQUARE_ROI,
+        )
+        if roi.size == 0:
+            return None
+
+        return roi
 
     def render(self, frame: np.ndarray, persons: list[Person]) -> None:
         for person in persons:
@@ -133,36 +228,26 @@ class Interpreter:
                 if not ret:
                     continue
 
+                self.current_frame = frame
+
                 persons = self.vision.process_frame(
                     frame,
                     percentage_padding=self.PERCENTAGE_PADDING,
                     square=self.SQUARE_ROI,
                 )
 
+                self.persons_by_id.clear()
+                self.persons_by_id.update({p.id: p for p in persons})
+
                 self.persons_records.append(persons)
                 self.update_avg_emotions()
 
-                # Safe lookup by ID in current frame (IDs are not list indices)
-                persons_by_id = {p.id: p for p in persons}
-
-                top_happy_id = self.get_top_person("happy")
-                if top_happy_id is None:
-                    print("more happy: no top yet (no 'happy' data)")
-                elif top_happy_id in persons_by_id:
-                    print(f"more happy {persons_by_id[top_happy_id]}")
-                else:
-                    print(f"more happy: top ID {top_happy_id} not visible this frame")
-
-                top_sad_id = self.get_top_person("sad")
-                if top_sad_id is None:
-                    print("more sad: no top yet (no 'sad' data)")
-                elif top_sad_id in persons_by_id:
-                    print(f"more sad {persons_by_id[top_sad_id]}")
-                else:
-                    print(f"more sad: top ID {top_sad_id} not visible this frame")
+                self.update_top_persons_by_threshold(persons)
 
                 if self.DISPLAY:
                     self.render(frame, persons)
+
+                self._tick_counter += 1
 
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord("q"):

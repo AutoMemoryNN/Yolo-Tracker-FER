@@ -33,6 +33,7 @@ class Vision:
         self.tracker = tracker
         self.face_detected: list[Person] = []
         self.camera = cv2.VideoCapture(camera_n)
+        self.available_emotions: list[str] = emotion_detector.get_available_emotions()
 
     def _extract_roi(
         self,
