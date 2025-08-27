@@ -8,6 +8,7 @@ torchvision
 huggingface_hub
 
 fer
+moviepy==1.0.3
 tensorflow
 
 deepface

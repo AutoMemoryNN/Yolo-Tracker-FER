@@ -36,7 +36,7 @@ class Interpreter:
 
     MAX_PERSONS_IN_RECORD: int = 50
     TOPS_UPDATE_TICKS: int = 50
-    EMOTION_THRESHOLD: float = 0.82
+    EMOTION_THRESHOLD: float = 0.70
 
     def __init__(self, vision: Vision) -> None:
         self.vision = vision
